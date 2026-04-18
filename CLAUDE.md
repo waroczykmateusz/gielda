@@ -2,11 +2,12 @@
 
 ## Project Overview
 
-Personal portfolio tracker for the Polish stock exchange (GPW) and US markets.
-Monitors stock prices, fires Telegram price alerts, detects RSI/SMA trading signals,
-runs daily AI-powered analysis via Claude API, and serves a Flask web dashboard.
+Aplikacja webowa (deploy: Vercel) do trackowania portfela na GPW i giełdach USA.
+Pokazuje ceny, RSI/MACD/SMA, sygnały i backtesty. Codzienne joby (cron) wysyłają
+analizę AI newsów i raport portfela na Telegram.
 
-**Not a library or service** — single-user desktop tool packaged as Windows .exe files.
+**Architektura webowa, nie desktop.** Wcześniej istniała wersja desktop (Tkinter +
+nieskończona pętla) — została całkowicie usunięta.
 
 ---
 
@@ -14,98 +15,140 @@ runs daily AI-powered analysis via Claude API, and serves a Flask web dashboard.
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.x |
-| Web UI | Flask 3.x + Jinja2 (inline templates in `dashboard.py`) |
-| Desktop launcher | Tkinter (`app.py`) |
+| Frontend | React 18 + Vite |
+| Backend | Vercel Serverless Functions (Python 3 via `@vercel/python`) |
+| API framework | Flask 3.x (jeden Flask app per plik w `api/`) |
+| DB | Vercel Postgres (psycopg 3) |
 | Market data | yfinance |
-| Notifications | python-telegram-bot + requests |
-| AI analysis | Anthropic Claude API (`anthropic` SDK) |
-| Scheduling | `schedule` library |
-| Packaging | PyInstaller (→ `dist/alert.exe`, `dist/dashboard.exe`) |
+| Notifications | requests → Telegram Bot API |
+| AI analysis | Anthropic Claude API (`claude-sonnet-4-6`) |
+| Scheduler | Vercel Cron Jobs (zdefiniowane w `vercel.json`) |
 
 ---
 
-## Key Files & Directories
+## Struktura projektu
 
 ```
 gielda/
-├── app.py            # Tkinter launcher — starts Flask subprocess, opens browser
-├── dashboard.py      # Flask web server (routes, templates, backtest engine)
-├── core.py           # Shared utilities: file I/O, price fetching, RSI, Telegram
-├── alert.py          # Background alert monitor (runs every 15 min)
-├── analiza_ai.py     # Daily AI analysis — fetches news, calls Claude API
-├── sygnaly.py        # Trading signal detector (RSI/SMA), scheduled at 9:30 & 13:00
-├── config.py         # API keys, stock symbols, alert thresholds — plaintext secrets
-├── portfel.json      # GPW portfolio state (source of truth)
-├── portfel_usa.json  # US portfolio state
-├── alert.spec        # PyInstaller spec for alert.py
-├── dashboard.spec    # PyInstaller spec for dashboard.py
-└── dist/             # Compiled executables (alert.exe, dashboard.exe ~55 MB each)
+├── frontend/                  # React + Vite SPA
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── api.js             # fetch wrapper, base = '/api'
+│   │   ├── main.jsx, index.css
+│   │   └── components/
+│   │       ├── PortfolioTab.jsx, StockCard.jsx, SummaryBox.jsx
+│   │       ├── TransactionForm.jsx, AlertForm.jsx
+│   │       └── BacktestPage.jsx       # per-symbol button trigger
+│   ├── package.json, vite.config.js
+│   └── index.html
+├── api/                       # Vercel Python functions
+│   ├── index.py               # Flask: /api/portfolio/<tab>, /api/transaction, /api/alert, /api/health
+│   ├── backtest.py            # Flask: GET /api/backtest?symbol=X&market=Y
+│   └── cron/
+│       ├── morning.py         # GET /api/cron/morning  (08:00 PL)
+│       └── evening.py         # GET /api/cron/evening  (17:00 PL)
+├── lib/                       # Shared utils (zastępuje stary core.py)
+│   ├── db.py                  # psycopg connection context manager
+│   ├── storage.py             # CRUD positions w Postgres
+│   ├── alerts_state.py        # sent_alerts (TTL dedup)
+│   ├── prices.py              # yfinance: pobierz_cene, pobierz_dane_dzienne
+│   ├── analysis.py            # analizuj_spolke, wykryj_konflikt (RSI vs MACD), analizuj_konflikt_sygnalu
+│   ├── ai.py                  # dzienna_analiza (newsy + Claude)
+│   ├── notify.py              # wyslij_telegram (secrets z os.environ)
+│   ├── alerts.py              # sprawdz_alerty (price thresholds → Telegram)
+│   ├── signals.py             # sprawdz_sygnaly (RSI/MACD/SMA → Telegram)
+│   ├── report.py              # dzienny_raport (podsumowanie portfela)
+│   └── sanitize.py            # numpy → JSON-safe values
+├── migrations/
+│   └── 001_init.sql           # schemat Postgres (positions, sent_alerts)
+├── scripts/
+│   └── import_portfolios.py   # jednorazowy import JSON → DB
+├── vercel.json                # crons + rewrites + buildCommand
+├── requirements.txt           # Python deps
+└── .env.example               # template env vars
 ```
-
-**Key line references:**
-- `core.py` shared utilities hub — see [core.py:1](core.py)
-- Portfolio JSON schema — see [portfel.json:1](portfel.json)
-- Flask routes — see [dashboard.py:1](dashboard.py)
-- Market-hours guard — see [core.py](core.py) `czy_gielda_otwarta()`
-- `get_base_dir()` path resolution (works for both .py and .exe) — [core.py](core.py)
 
 ---
 
-## Build & Run Commands
+## REST API
 
-### Run from source
+| Method | Route | Source | Notes |
+|---|---|---|---|
+| GET | `/api/portfolio/<tab>` | [api/index.py](api/index.py) | tab: `gpw` / `usa` |
+| POST | `/api/transaction` | [api/index.py](api/index.py) | `{tab, symbol, nazwa, akcje, cena, typ}` |
+| POST | `/api/alert` | [api/index.py](api/index.py) | `{tab, symbol, alert_powyzej, alert_ponizej}` |
+| GET | `/api/backtest?symbol=X&market=Y` | [api/backtest.py](api/backtest.py) | per-symbol (limit 10s) |
+| GET | `/api/cron/morning` | [api/cron/morning.py](api/cron/morning.py) | wymaga `Authorization: Bearer ${CRON_SECRET}` |
+| GET | `/api/cron/evening` | [api/cron/evening.py](api/cron/evening.py) | jw. |
+| GET | `/api/health` | [api/index.py](api/index.py) | smoke test |
+
+---
+
+## Cron schedule (vercel.json)
+
+| Cron | UTC | Czas PL (CEST/CET) | Akcje |
+|---|---|---|---|
+| morning | `0 6 * * 1-5` | 08:00 / 07:00 | `lib.ai.dzienna_analiza()` |
+| evening | `0 15 * * 1-5` | 17:00 / 16:00 | `signals.sprawdz_sygnaly()` + `alerts.sprawdz_alerty()` + `report.dzienny_raport()` |
+
+Vercel Hobby pozwala na max 2 cron joby z częstotliwością 1x dziennie. Bardziej granularny harmonogram = Vercel Pro lub zewnętrzny cron.
+
+---
+
+## Database schema
+
+```sql
+positions (market, symbol, nazwa, akcje, srednia_cena, alert_powyzej, alert_ponizej)  PK (market, symbol)
+sent_alerts (alert_key, price, sent_at, expires_at)  PK (alert_key)
+```
+
+Patrz [migrations/001_init.sql](migrations/001_init.sql).
+
+---
+
+## Environment variables (Vercel Project Settings)
+
+```
+POSTGRES_URL       # auto-injected przez Vercel Postgres
+TELEGRAM_TOKEN
+TELEGRAM_CHAT_ID
+ANTHROPIC_API_KEY
+CRON_SECRET        # Vercel auto-generuje dla cron jobs
+```
+
+Lokalnie: `vercel env pull .env.local`.
+
+---
+
+## Run & deploy
+
+### Lokalnie (development)
 ```bash
-python app.py          # Full launcher (Tkinter GUI + Flask on localhost:5000)
-python dashboard.py    # Flask dashboard only
-python alert.py        # Alert monitor only
-python sygnaly.py      # Signal detector only
-python analiza_ai.py   # AI analysis (one-shot)
+# Frontend dev (proxy /api → vercel dev)
+cd frontend && npm install && npm run dev
+
+# Backend serverless lokalnie (osobny terminal)
+vercel dev
 ```
 
-### Package to .exe (Windows)
+### Deploy
 ```bash
-pyinstaller alert.spec
-pyinstaller dashboard.spec
-# Output: dist/alert.exe, dist/dashboard.exe
+git push  # Vercel auto-deploy z brancha podpiętego do projektu
 ```
 
-### Windows shortcut
-```bat
-start_dashboard.bat    # Calls python app.py
+### Migracja danych (jednorazowo, lokalnie)
+```bash
+vercel env pull .env.local
+psql $POSTGRES_URL -f migrations/001_init.sql
+python scripts/import_portfolios.py .data-backup/portfel.json .data-backup/portfel_usa.json
 ```
 
-> **No test suite exists.** Manual testing only.
-
 ---
 
-## Configuration
+## Testing crons lokalnie
+```bash
+curl http://localhost:3000/api/cron/morning -H "Authorization: Bearer $CRON_SECRET"
+curl http://localhost:3000/api/cron/evening -H "Authorization: Bearer $CRON_SECRET"
+```
 
-`config.py` holds all secrets and settings:
-- `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` — Telegram bot credentials
-- `ANTHROPIC_API_KEY` — Claude API key
-- `SPOLKI` — dict of monitored symbols with price alert thresholds
-- `CZESTOTLIWOSC_MINUT` — alert check interval (default: 15)
-
-Portfolios are JSON files edited via the dashboard UI or directly:
-- `portfel.json` — GPW stocks (symbol keys like `"CRI.WA"`)
-- `portfel_usa.json` — US stocks (e.g., `"RKLB"`)
-
----
-
-## Flask Routes
-
-| Method | Route | Purpose |
-|---|---|---|
-| GET | `/` | Portfolio dashboard (`?tab=gpw\|usa`) |
-| GET | `/backtest` | Strategy backtesting |
-| POST | `/dodaj` | Add transaction |
-| POST | `/ustaw_alert` | Set price alert thresholds |
-
----
-
-## Additional Documentation
-
-| Topic | File |
-|---|---|
-| Architectural patterns & design decisions | [.claude/docs/architectural_patterns.md](.claude/docs/architectural_patterns.md) |
+> **Brak test suite — tylko manualne testy.**

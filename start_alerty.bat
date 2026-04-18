@@ -1,3 +1,0 @@
-@echo off
-echo Uruchamiam alerty Telegram...
-start "Alerty" cmd /k "cd /d C:\Users\waroc\Desktop\gielda && python alert.py"

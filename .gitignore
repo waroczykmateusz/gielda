@@ -2,19 +2,17 @@
 __pycache__/
 *.pyc
 *.pyo
-build/
-dist/
-*.spec
 
-# Secrets — nie commituj!
-backend/config.py
-config.py
+# Secrets / local env
+.env
+.env.local
+.env.*.local
 
-# Portfolio data (lokalne dane, nie wersjonowane)
-backend/portfel.json
-backend/portfel_usa.json
-portfel.json
-portfel_usa.json
+# Vercel
+.vercel/
+
+# Local data backup (sprzed migracji do Postgres)
+.data-backup/
 
 # Node
 frontend/node_modules/
