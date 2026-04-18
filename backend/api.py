@@ -7,6 +7,23 @@ from core import (
 )
 import json
 import os
+import math
+
+def sanitize(obj):
+    import numpy as np
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [sanitize(v) for v in obj]
+    return obj
 
 app = Flask(__name__)
 CORS(app)
@@ -79,7 +96,7 @@ def przelicz_portfel(portfel):
 def portfolio(tab):
     portfel = wczytaj_portfel() if tab == "gpw" else wczytaj_portfel_usa()
     spolki, podsumowanie = przelicz_portfel(portfel)
-    return jsonify({"spolki": spolki, "podsumowanie": podsumowanie})
+    return jsonify(sanitize({"spolki": spolki, "podsumowanie": podsumowanie}))
 
 @app.route("/api/transaction", methods=["POST"])
 def dodaj():
@@ -128,13 +145,17 @@ def ustaw_alert():
 
 @app.route("/api/backtest")
 def backtest():
-    import yfinance as yf
-    gpw = wczytaj_portfel()
-    usa = wczytaj_portfel_usa()
-    wyniki = []
-    for symbol, info in {**gpw, **usa}.items():
-        wyniki.append(_backtest_spolki(symbol, info["nazwa"]))
-    return jsonify([w for w in wyniki if w])
+    try:
+        gpw = wczytaj_portfel()
+        usa = wczytaj_portfel_usa()
+        wyniki = []
+        for symbol, info in {**gpw, **usa}.items():
+            wyniki.append(_backtest_spolki(symbol, info["nazwa"]))
+        return jsonify(sanitize([w for w in wyniki if w]))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 def _backtest_spolki(symbol, nazwa):
     try:

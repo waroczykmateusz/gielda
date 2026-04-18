@@ -3,6 +3,7 @@ import os
 import json
 import schedule
 import time
+import requests as _requests
 from datetime import datetime
 from config import CZESTOTLIWOSC_MINUT
 from core import (
@@ -13,12 +14,34 @@ from core import (
 from analiza_ai import dzienna_analiza
 
 PLIK_USA = os.path.join(get_base_dir(), "portfel_usa.json")
+DASHBOARD_URL = "http://localhost:5000"
 
 def wczytaj_portfel_usa():
     if os.path.exists(PLIK_USA):
         with open(PLIK_USA, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
+
+def pobierz_portfel_z_api(tab):
+    """Pobiera portfel z backendu; fallback na plik JSON gdy backend nie działa."""
+    try:
+        r = _requests.get(f"{DASHBOARD_URL}/api/portfolio/{tab}", timeout=5)
+        if r.status_code == 200:
+            spolki = r.json().get("spolki", [])
+            # Przelicz na format słownikowy zgodny z portfel.json
+            return {
+                s["symbol"]: {
+                    "nazwa": s["nazwa"],
+                    "akcje": s["akcje"],
+                    "srednia_cena": s["srednia"],
+                    "alert_powyzej": s.get("alert_up"),
+                    "alert_ponizej": s.get("alert_down"),
+                }
+                for s in spolki
+            }
+    except Exception:
+        pass
+    return wczytaj_portfel() if tab == "gpw" else wczytaj_portfel_usa()
 
 wyslane_alerty = {}
 
@@ -73,12 +96,12 @@ def sprawdz_alerty():
 
     # GPW: 9:00-17:05
     if 9 <= godzina < 17:
-        sprawdz_alerty_dla(wczytaj_portfel(), "GPW")
+        sprawdz_alerty_dla(pobierz_portfel_z_api("gpw"), "GPW")
 
     # USA: 15:30-22:00
     if godzina >= 15 and not (godzina == 15 and teraz.minute < 30):
         if godzina < 22:
-            sprawdz_alerty_dla(wczytaj_portfel_usa(), "USA")
+            sprawdz_alerty_dla(pobierz_portfel_z_api("usa"), "USA")
 
 def sprawdz_sygnaly():
     teraz = datetime.now()
@@ -88,7 +111,7 @@ def sprawdz_sygnaly():
     print(f"\n[{teraz.strftime('%H:%M')}] Sprawdzam sygnaly...")
     wszystkie_sygnaly = []
 
-    wszystkie = {**wczytaj_portfel(), **wczytaj_portfel_usa()}
+    wszystkie = {**pobierz_portfel_z_api("gpw"), **pobierz_portfel_z_api("usa")}
     for symbol, info in wszystkie.items():
         sygnaly, _, _, _, _, _ = analizuj_spolke(symbol)
         if sygnaly:
@@ -138,14 +161,14 @@ def dzienny_raport():
     teraz = datetime.now()
     linie = [f"📊 <b>Podsumowanie {teraz.strftime('%d.%m.%Y')}</b>\n"]
     linie.append("🇵🇱 <b>GPW</b>")
-    linie.extend(sekcja(wczytaj_portfel(), "zl"))
+    linie.extend(sekcja(pobierz_portfel_z_api("gpw"), "zl"))
     linie.append("\n🇺🇸 <b>USA</b>")
-    linie.extend(sekcja(wczytaj_portfel_usa(), "$"))
+    linie.extend(sekcja(pobierz_portfel_z_api("usa"), "$"))
     wyslij_telegram("\n".join(linie))
 
 if __name__ == "__main__":
-    gpw = wczytaj_portfel()
-    usa = wczytaj_portfel_usa()
+    gpw = pobierz_portfel_z_api("gpw")
+    usa = pobierz_portfel_z_api("usa")
     gpw_alerty = [f"• {v['nazwa']}" for v in gpw.values() if v.get("alert_powyzej") or v.get("alert_ponizej")]
     usa_alerty = [f"• {v['nazwa']}" for v in usa.values() if v.get("alert_powyzej") or v.get("alert_ponizej")]
     wyslij_telegram(

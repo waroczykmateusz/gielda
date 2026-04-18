@@ -71,9 +71,19 @@ function Sekcja({ title, data, cols }) {
 
 export default function BacktestPage() {
   const [wyniki, setWyniki] = useState(null)
+  const [blad, setBlad] = useState(null)
 
-  useEffect(() => { fetchBacktest().then(setWyniki) }, [])
+  useEffect(() => {
+    fetchBacktest().then(data => {
+      if (!Array.isArray(data)) {
+        setBlad(data?.error || 'Nieznany błąd serwera')
+      } else {
+        setWyniki(data)
+      }
+    }).catch(e => setBlad(e.message))
+  }, [])
 
+  if (blad) return <p style={{ color: '#e74c3c', fontSize: 15, textAlign: 'center', padding: 60 }}>Błąd: {blad}</p>
   if (!wyniki) return <p style={{ color: '#444', fontSize: 16, textAlign: 'center', padding: 60 }}>⏳ Trwa obliczanie... może potrwać 2–3 minuty.</p>
 
   return (
