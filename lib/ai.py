@@ -118,6 +118,7 @@ Odpowiedz po polsku, zwiezle i konkretnie."""
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=300,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}]
         )
         return message.content[0].text
