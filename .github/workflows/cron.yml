@@ -32,7 +32,8 @@ jobs:
       - name: Call alerts endpoint
         run: |
           curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/alerts" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
 
   morning:
     if: >
@@ -42,8 +43,9 @@ jobs:
     steps:
       - name: Call morning endpoint
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/morning" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          curl -s -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/morning" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
 
   signals-10:
     if: >
@@ -54,7 +56,8 @@ jobs:
       - name: Call signals endpoint (10:00)
         run: |
           curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/signals" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
 
   signals-14:
     if: >
@@ -64,7 +67,8 @@ jobs:
       - name: Call signals endpoint (14:00)
         run: |
           curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/signals" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
 
   report:
     if: >
@@ -75,4 +79,5 @@ jobs:
       - name: Call report endpoint
         run: |
           curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/report" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"

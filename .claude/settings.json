@@ -16,7 +16,8 @@
       "Bash(awk '{print $5}')",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git commit *)"
     ]
   }
 }
