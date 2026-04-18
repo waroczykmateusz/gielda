@@ -9,7 +9,8 @@
     { "source": "/api/alert", "destination": "/api/index" },
     { "source": "/api/health", "destination": "/api/index" },
     { "source": "/api/dividends", "destination": "/api/dividends" },
-    { "source": "/api/chart", "destination": "/api/chart" }
+    { "source": "/api/chart", "destination": "/api/chart" },
+    { "source": "/api/correlation", "destination": "/api/correlation" }
   ],
   "crons": []
 }

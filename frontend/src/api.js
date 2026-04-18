@@ -35,6 +35,11 @@ export async function fetchDividends() {
   return res.json()
 }
 
+export async function fetchCorrelation() {
+  const res = await fetch(`${BASE}/correlation`)
+  return res.json()
+}
+
 export async function fetchChart(symbol) {
   const params = new URLSearchParams({ symbol })
   const res = await fetch(`${BASE}/chart?${params.toString()}`)
