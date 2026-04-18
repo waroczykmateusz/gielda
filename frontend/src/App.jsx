@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import PortfolioTab from './components/PortfolioTab.jsx'
 import BacktestPage from './components/BacktestPage.jsx'
+import DividendPage from './components/DividendPage.jsx'
 
 const styles = {
   tabs: { display: 'flex', gap: 4, marginBottom: 30 },
@@ -17,16 +18,17 @@ export default function App() {
       <p style={{ color: '#666', fontSize: 13, marginBottom: 20 }}>Odświeżenie co 60 sekund</p>
 
       <div style={styles.tabs}>
-        {['gpw', 'usa', 'backtest'].map(t => (
+        {['gpw', 'usa', 'dywidendy', 'backtest'].map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }}>
-            {t === 'gpw' ? 'GPW' : t === 'usa' ? 'USA' : 'Backtest'}
+            {t === 'gpw' ? 'GPW' : t === 'usa' ? 'USA' : t === 'dywidendy' ? 'Dywidendy' : 'Backtest'}
           </button>
         ))}
       </div>
 
       {tab === 'gpw' && <PortfolioTab tab="gpw" waluta="zł" />}
       {tab === 'usa' && <PortfolioTab tab="usa" waluta="$" />}
+      {tab === 'dywidendy' && <DividendPage />}
       {tab === 'backtest' && <BacktestPage />}
     </div>
   )
