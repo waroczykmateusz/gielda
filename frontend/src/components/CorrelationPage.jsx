@@ -25,10 +25,18 @@ function opisKorelacji(v) {
 export default function CorrelationPage() {
   const [data, setData] = useState(null)
   const [hovered, setHovered] = useState(null)
+  const [error, setError] = useState(null)
 
-  useEffect(() => { fetchCorrelation().then(setData) }, [])
+  useEffect(() => {
+    const timeout = setTimeout(() => setError('Przekroczono limit czasu. Spróbuj odświeżyć stronę.'), 30000)
+    fetchCorrelation()
+      .then(d => { clearTimeout(timeout); setData(d) })
+      .catch(e => { clearTimeout(timeout); setError(String(e)) })
+    return () => clearTimeout(timeout)
+  }, [])
 
-  if (!data) return <div style={{ color: '#666', padding: 40, textAlign: 'center' }}>Obliczanie korelacji (może potrwać chwilę)...</div>
+  if (error) return <div style={{ color: '#e74c3c', padding: 20 }}>Błąd: {error}</div>
+  if (!data) return <div style={{ color: '#666', padding: 40, textAlign: 'center' }}>Obliczanie korelacji (może potrwać ~15 sekund)...</div>
   if (data.error) return <div style={{ color: '#e74c3c', padding: 20 }}>Błąd: {data.error}</div>
 
   const { symbole, nazwy, markety, macierz, wysokie_pary } = data

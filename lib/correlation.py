@@ -15,34 +15,46 @@ def korelacja_portfela():
     if len(symbole) < 2:
         return {'error': 'Za mało spółek do analizy korelacji (minimum 2)'}
 
-    returns = {}
-    for symbol in symbole:
-        try:
-            t = yf.Ticker(symbol)
-            h = t.history(period='1y', interval='1d')
-            if h.empty or len(h) < 30:
-                continue
-            r = h['Close'].pct_change().dropna()
-            returns[symbol] = r
-        except Exception:
-            continue
+    # Pobierz wszystkie symbole jednym requestem — dużo szybsze niż pętla
+    try:
+        raw = yf.download(
+            symbole,
+            period='1y',
+            interval='1d',
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+    except Exception as e:
+        return {'error': f'Błąd pobierania danych: {e}'}
 
-    dostepne = list(returns.keys())
+    # yf.download zwraca MultiIndex gdy >1 symbol
+    if isinstance(raw.columns, pd.MultiIndex):
+        close = raw['Close']
+    else:
+        close = raw[['Close']]
+        close.columns = symbole[:1]
+
+    # Usuń symbole z za małą ilością danych
+    dostepne = [s for s in symbole if s in close.columns and close[s].notna().sum() >= 30]
+
     if len(dostepne) < 2:
         return {'error': 'Nie udało się pobrać danych dla wystarczającej liczby spółek'}
 
-    df = pd.DataFrame(returns).dropna()
-    corr = df.corr()
+    returns = close[dostepne].pct_change().dropna(how='all')
+    corr = returns.corr()
 
     macierz = []
     for s1 in dostepne:
         wiersz = []
         for s2 in dostepne:
-            val = round(float(corr.loc[s1, s2]), 3) if s1 in corr.index and s2 in corr.columns else None
+            try:
+                val = round(float(corr.loc[s1, s2]), 3)
+            except Exception:
+                val = None
             wiersz.append(val)
         macierz.append(wiersz)
 
-    # grupy ryzyka: pary z korelacją > 0.7
     wysokie_pary = []
     for i, s1 in enumerate(dostepne):
         for j, s2 in enumerate(dostepne):
