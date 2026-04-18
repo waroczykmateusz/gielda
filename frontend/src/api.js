@@ -30,6 +30,11 @@ export async function fetchBacktest(symbol, market) {
   return res.json()
 }
 
+export async function fetchDividends() {
+  const res = await fetch(`${BASE}/dividends`)
+  return res.json()
+}
+
 export async function fetchPortfolioSymbols() {
   const [gpw, usa] = await Promise.all([
     fetchPortfolio('gpw'),

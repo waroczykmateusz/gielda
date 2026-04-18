@@ -7,7 +7,8 @@
     { "source": "/api/portfolio/:tab", "destination": "/api/index" },
     { "source": "/api/transaction", "destination": "/api/index" },
     { "source": "/api/alert", "destination": "/api/index" },
-    { "source": "/api/health", "destination": "/api/index" }
+    { "source": "/api/health", "destination": "/api/index" },
+    { "source": "/api/dividends", "destination": "/api/dividends" }
   ],
   "crons": []
 }
