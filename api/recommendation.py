@@ -10,53 +10,39 @@ app = Flask(__name__)
 
 def _buduj_prompt(gpw, usa, korelacje):
     def opis_spolki(s, waluta):
-        sygnaly_txt = ', '.join(f"{sg['typ']}: {sg['opis']}" for sg in s.get('sygnaly', [])) or 'brak sygnałów'
         zysk_proc = s.get('zysk_proc', 0)
-        znak = '+' if zysk_proc >= 0 else ''
+        sygnaly = [sg['typ'] for sg in s.get('sygnaly', [])]
+        syg_txt = ','.join(sygnaly) if sygnaly else '-'
         return (
-            f"  - {s['nazwa']} ({s['symbol']}): "
-            f"cena {s['cena']} {waluta}, "
-            f"pozycja {s['wartosc']} {waluta}, "
-            f"P&L {znak}{zysk_proc}%, "
-            f"RSI_d={s.get('rsi_d', '?')} RSI_w={s.get('rsi_w', '?')}, "
-            f"sygnały: [{sygnaly_txt}]"
+            f"{s['symbol']}: P&L {'+' if zysk_proc >= 0 else ''}{zysk_proc}% "
+            f"RSI_d={s.get('rsi_d','?')} RSI_w={s.get('rsi_w','?')} "
+            f"syg=[{syg_txt}]"
         )
 
-    gpw_spolki = gpw.get('spolki', [])
-    usa_spolki = usa.get('spolki', [])
     gpw_pod = gpw.get('podsumowanie', {})
     usa_pod = usa.get('podsumowanie', {})
-
-    gpw_txt = '\n'.join(opis_spolki(s, 'zł') for s in gpw_spolki) or '  (brak spółek)'
-    usa_txt = '\n'.join(opis_spolki(s, '$') for s in usa_spolki) or '  (brak spółek)'
+    gpw_txt = ' | '.join(opis_spolki(s, 'zł') for s in gpw.get('spolki', [])) or 'brak'
+    usa_txt = ' | '.join(opis_spolki(s, '$') for s in usa.get('spolki', [])) or 'brak'
 
     wysokie = korelacje.get('wysokie_pary', []) if korelacje and not korelacje.get('error') else []
-    korel_txt = '\n'.join(
-        f"  - {p['nazwa1']} ↔ {p['nazwa2']}: korelacja {p['korelacja']}"
-        for p in wysokie
-    ) or '  Brak par z wysoką korelacją — portfel dobrze zdywersyfikowany'
+    korel_txt = ', '.join(f"{p['symbol1']}↔{p['symbol2']}:{p['korelacja']}" for p in wysokie) or 'brak'
 
-    prompt = f"""Jesteś doświadczonym polskim doradcą inwestycyjnym. Przeanalizuj poniższy portfel prywatnego inwestora i podaj KONKRETNE rekomendacje.
+    return f"""Jesteś polskim doradcą inwestycyjnym. Przeanalizuj portfel i daj KONKRETNE rekomendacje.
 
-=== PORTFEL GPW ===
-Wartość: {gpw_pod.get('wartosc', '?')} zł | Zainwestowano: {gpw_pod.get('zainwestowano', '?')} zł | P&L: {gpw_pod.get('zysk', '?')} zł ({gpw_pod.get('zwrot', '?')}%)
+GPW: wartość={gpw_pod.get('wartosc','?')}zł zwrot={gpw_pod.get('zwrot','?')}%
 {gpw_txt}
 
-=== PORTFEL USA ===
-Wartość: {usa_pod.get('wartosc', '?')} $ | Zainwestowano: {usa_pod.get('zainwestowano', '?')} $ | P&L: {usa_pod.get('zysk', '?')} $ ({usa_pod.get('zwrot', '?')}%)
+USA: wartość={usa_pod.get('wartosc','?')}$ zwrot={usa_pod.get('zwrot','?')}%
 {usa_txt}
 
-=== KONCENTRACJA RYZYKA (korelacja ≥ 0.7) ===
-{korel_txt}
+Wysokie korelacje (ryzyko): {korel_txt}
 
-Napisz zwięzłą analizę po polsku w 3 sekcjach:
-1. **OCENA PORTFELA** (2-3 zdania): ogólna kondycja, główne mocne i słabe strony
-2. **KONKRETNE REKOMENDACJE** (lista punktowana): co dokupić, co zredukować, jakie ryzyko ograniczyć — z uzasadnieniem
-3. **NAJWAŻNIEJSZY PRIORYTET**: jedna rzecz do zrobienia w pierwszej kolejności
+Napisz po polsku 3 sekcje:
+**OCENA PORTFELA**: 2 zdania o kondycji
+**REKOMENDACJE**: 3-4 punkty (co dokupić/sprzedać/zmienić)
+**PRIORYTET**: jedna najważniejsza akcja
 
-Bądź konkretny i bezpośredni. Nie powtarzaj danych wejściowych."""
-
-    return prompt
+Konkretnie, bez wstępu."""
 
 
 @app.route('/api/recommendation', methods=['POST'])
@@ -75,10 +61,10 @@ def recommendation():
 
         prompt = _buduj_prompt(gpw, usa, korelacje)
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = anthropic.Anthropic(api_key=api_key, timeout=9.0)
         msg = client.messages.create(
-            model='claude-sonnet-4-6',
-            max_tokens=800,
+            model='claude-haiku-4-5-20251001',
+            max_tokens=500,
             messages=[{'role': 'user', 'content': prompt}],
         )
         return jsonify({'rekomendacja': msg.content[0].text})
