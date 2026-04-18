@@ -35,6 +35,15 @@ export async function fetchDividends() {
   return res.json()
 }
 
+export async function fetchRecommendation(gpw, usa, korelacje) {
+  const res = await fetch(`${BASE}/recommendation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gpw, usa, korelacje }),
+  })
+  return res.json()
+}
+
 export async function fetchCorrelation() {
   const res = await fetch(`${BASE}/correlation`)
   return res.json()
