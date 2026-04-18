@@ -11,6 +11,40 @@ from .storage import get_portfolio
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 
+def _wskazniki(symbol):
+    try:
+        import yfinance as yf
+        t = yf.Ticker(symbol)
+        h = t.history(period="6mo", interval="1d")
+        if len(h) < 30:
+            return {}
+        c = h["Close"]
+
+        delta = c.diff()
+        rs = delta.clip(lower=0).rolling(14).mean() / (-delta.clip(upper=0)).rolling(14).mean()
+        rsi = round(float((100 - 100 / (1 + rs)).iloc[-1]), 1)
+
+        ema12 = c.ewm(span=12, adjust=False).mean()
+        ema26 = c.ewm(span=26, adjust=False).mean()
+        macd = ema12 - ema26
+        sig = macd.ewm(span=9, adjust=False).mean()
+        hist = round(float((macd - sig).iloc[-1]), 3)
+
+        cross = ""
+        if len(macd) >= 2:
+            if macd.iloc[-1] > sig.iloc[-1] and macd.iloc[-2] <= sig.iloc[-2]:
+                cross = "KUP (MACD przeciął sygnał od dołu)"
+            elif macd.iloc[-1] < sig.iloc[-1] and macd.iloc[-2] >= sig.iloc[-2]:
+                cross = "UWAGA (MACD przeciął sygnał od góry)"
+
+        sma50 = round(float(c.rolling(50).mean().iloc[-1]), 2) if len(c) >= 50 else None
+        sma200 = round(float(c.rolling(200).mean().iloc[-1]), 2) if len(c) >= 200 else None
+
+        return {"rsi": rsi, "macd_hist": hist, "macd_cross": cross, "sma50": sma50, "sma200": sma200}
+    except Exception:
+        return {}
+
+
 def pobierz_newsy(nazwa, symbol):
     try:
         nazwa_szukana = nazwa.replace(" SA", "").replace(" S.A.", "").strip()
@@ -31,7 +65,7 @@ def pobierz_newsy(nazwa, symbol):
         return f"Nie udalo sie pobrac newsow: {e}"
 
 
-def analizuj_ai(nazwa, symbol, srednia_cena, akcje, newsy):
+def analizuj_ai(nazwa, symbol, srednia_cena, akcje, newsy, wsk):
     try:
         import anthropic
         cena_aktualna, zmiana_dzis = pobierz_dane_dzienne(symbol)
@@ -45,6 +79,20 @@ def analizuj_ai(nazwa, symbol, srednia_cena, akcje, newsy):
             zysk = round((cena_aktualna - srednia_cena) * akcje, 2)
             zysk_proc = round((cena_aktualna - srednia_cena) / srednia_cena * 100, 2)
 
+        rsi = wsk.get("rsi", "brak")
+        macd_hist = wsk.get("macd_hist", "brak")
+        macd_cross = wsk.get("macd_cross", "")
+        sma50 = wsk.get("sma50")
+        sma200 = wsk.get("sma200")
+
+        techniczne = f"RSI={rsi} (ponizej 30=wyprzedana, powyzej 70=wykupiona)\n"
+        techniczne += f"MACD histogram={macd_hist} (powyzej 0=trend wzrostowy)\n"
+        if macd_cross:
+            techniczne += f"Sygnal MACD: {macd_cross}\n"
+        if sma50 and sma200:
+            trend = "powyzej SMA200 (trend wzrostowy)" if cena_aktualna != "nieznana" and cena_aktualna > sma200 else "ponizej SMA200 (trend spadkowy)"
+            techniczne += f"SMA50={sma50} SMA200={sma200} — cena {trend}\n"
+
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         prompt = f"""Jestes doswiadczonym analitykiem gieldowym. Przeanalizuj krotko spolke {nazwa} (symbol: {symbol}).
 
@@ -55,13 +103,15 @@ Dane inwestora:
 - Zmiana dzisiaj: {zmiana_dzis}%
 - Aktualny zysk/strata: {zysk} ({zysk_proc}%)
 
+Wskazniki techniczne:
+{techniczne}
 Najnowsze newsy o spolce:
 {newsy}
 
 Napisz krotka analize (max 3 zdania) zawierajaca:
-1. Ogolna ocena sytuacji spolki na podstawie newsow i aktualnej ceny
+1. Ogolna ocena sytuacji spolki lacząc newsy z sygnalami technicznymi
 2. Krotkoterminowa rekomendacja (trzymaj/dokup/sprzedaj) BIORAC POD UWAGE ze inwestor jest na {zysk_proc}% zysku/stracie
-3. Jeden kluczowy czynnik ryzyka lub szansa
+3. Jeden kluczowy czynnik ryzyka lub szansa wynikajacy z analizy technicznej lub newsow
 
 Odpowiedz po polsku, zwiezle i konkretnie."""
 
@@ -91,7 +141,8 @@ def dzienna_analiza():
     for symbol, info in wszystkie.items():
         nazwa = info["nazwa"]
         newsy = pobierz_newsy(nazwa, symbol)
-        analiza = analizuj_ai(nazwa, symbol, info["srednia_cena"], info["akcje"], newsy)
+        wsk = _wskazniki(symbol)
+        analiza = analizuj_ai(nazwa, symbol, info["srednia_cena"], info["akcje"], newsy, wsk)
 
         wiadomosc = (
             f"📈 <b>{nazwa}</b> ({symbol})\n\n"
