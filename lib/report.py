@@ -149,13 +149,46 @@ Bez wstępu, konkretnie.""".replace("{waluta_gpw}", "zł")
         if not api_key:
             return
         client = anthropic.Anthropic(api_key=api_key)
-        msg = client.messages.create(
+
+        # 3 niezależne analizy z lekką losowością
+        analizy = []
+        for _ in range(3):
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                temperature=0.5,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            analizy.append(msg.content[0].text.strip())
+
+        # 4. wywołanie — synteza konsensusu
+        synteza_prompt = f"""Poniżej znajdują się 3 niezależne analizy portfela inwestycyjnego wygenerowane przez AI.
+Twoim zadaniem jest wyciągnąć z nich KONSENSUS — czyli te wnioski i rekomendacje, które powtarzają się lub są ze sobą zgodne.
+Zignoruj sprzeczności i skrajne opinie, które pojawiają się tylko raz.
+
+=== ANALIZA 1 ===
+{analizy[0]}
+
+=== ANALIZA 2 ===
+{analizy[1]}
+
+=== ANALIZA 3 ===
+{analizy[2]}
+
+Napisz FINALNĄ rekomendację po polsku (max 200 słów) w formacie:
+**OCENA DNIA**: najczęściej powtarzająca się ocena
+**NA JUTRO**: tylko te punkty które pojawiły się w co najmniej 2 analizach
+**PRIORYTET**: jedna akcja zgodna z większością analiz
+
+Konkretnie, bez wstępu."""
+
+        final = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=400,
             temperature=0,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": synteza_prompt}],
         )
-        tekst = msg.content[0].text.strip()
+        tekst = final.content[0].text.strip()
         wyslij_telegram(f"🤖 <b>Rekomendacja AI — {datetime.now().strftime('%d.%m.%Y')}</b>\n\n{tekst}")
     except Exception as e:
         print(f"Blad rekomendacji AI: {e}")
