@@ -35,6 +35,12 @@ export async function fetchDividends() {
   return res.json()
 }
 
+export async function fetchChart(symbol) {
+  const params = new URLSearchParams({ symbol })
+  const res = await fetch(`${BASE}/chart?${params.toString()}`)
+  return res.json()
+}
+
 export async function fetchPortfolioSymbols() {
   const [gpw, usa] = await Promise.all([
     fetchPortfolio('gpw'),
