@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchChart } from '../api.js'
+import { fetchChart, clearAlert } from '../api.js'
 import StockChart from './StockChart.jsx'
 
 const st = {
@@ -16,9 +16,16 @@ const st = {
   sectionTitle: { color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 4 },
 }
 
-export default function StockDetail({ s, waluta, onClose }) {
+const btnDel = { background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: 14, padding: '0 4px', lineHeight: 1 }
+
+export default function StockDetail({ s, waluta, tab, onClose, onRefresh }) {
   const [chart, setChart] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const usunAlert = async () => {
+    await clearAlert(tab, s.symbol)
+    onRefresh(`Alerty usunięte dla ${s.symbol}`)
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -66,14 +73,14 @@ export default function StockDetail({ s, waluta, onClose }) {
 
         <div>
           <div style={st.sectionTitle}>Alerty</div>
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
             {s.alert_up
-              ? <span style={{ ...st.tag, background: '#1a3a2a', color: '#26c281' }}>powyżej: {s.alert_up} {waluta}</span>
+              ? <><span style={{ ...st.tag, background: '#1a3a2a', color: '#26c281' }}>powyżej: {s.alert_up} {waluta}</span><button style={btnDel} title="Usuń alert" onClick={usunAlert}>✕</button></>
               : <span style={{ ...st.tag, background: '#13151f', color: '#444' }}>brak alertu powyżej</span>}
           </div>
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {s.alert_down
-              ? <span style={{ ...st.tag, background: '#3a1a1a', color: '#e74c3c' }}>poniżej: {s.alert_down} {waluta}</span>
+              ? <><span style={{ ...st.tag, background: '#3a1a1a', color: '#e74c3c' }}>poniżej: {s.alert_down} {waluta}</span><button style={btnDel} title="Usuń alert" onClick={usunAlert}>✕</button></>
               : <span style={{ ...st.tag, background: '#13151f', color: '#444' }}>brak alertu poniżej</span>}
           </div>
 
