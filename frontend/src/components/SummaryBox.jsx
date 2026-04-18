@@ -8,6 +8,7 @@ const s = {
 
 export default function SummaryBox({ podsumowanie: p, waluta }) {
   const plus = p.zysk >= 0
+  const plusDzis = (p.zysk_dzis ?? 0) >= 0
   return (
     <div style={s.wrap}>
       <h2 style={{ fontSize: 16, color: '#aaa', marginBottom: 16 }}>Podsumowanie portfela</h2>
@@ -16,6 +17,7 @@ export default function SummaryBox({ podsumowanie: p, waluta }) {
         <div style={s.box}><div style={s.label}>Zainwestowano</div><div style={s.value}>{p.zainwestowano} {waluta}</div></div>
         <div style={s.box}><div style={s.label}>Zysk / Strata</div><div style={{ ...s.value, color: plus ? '#26c281' : '#e74c3c' }}>{p.zysk} {waluta}</div></div>
         <div style={s.box}><div style={s.label}>Zwrot</div><div style={{ ...s.value, color: plus ? '#26c281' : '#e74c3c' }}>{p.zwrot}%</div></div>
+        <div style={s.box}><div style={s.label}>Dzisiaj</div><div style={{ ...s.value, color: plusDzis ? '#26c281' : '#e74c3c' }}>{(p.zysk_dzis ?? 0) >= 0 ? '+' : ''}{p.zysk_dzis} {waluta}</div></div>
       </div>
     </div>
   )

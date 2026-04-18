@@ -19,7 +19,7 @@ CORS(app)
 
 def _przelicz_portfel(portfel):
     spolki = []
-    suma_wartosc = suma_zainwestowano = 0
+    suma_wartosc = suma_zainwestowano = suma_zysk_dzis = 0
     for symbol, info in portfel.items():
         cena, zmiana = pobierz_dane_dzienne(symbol)
         if cena is None:
@@ -28,8 +28,11 @@ def _przelicz_portfel(portfel):
         zainwestowano = round(info["srednia_cena"] * info["akcje"], 2)
         zysk = round(wartosc - zainwestowano, 2)
         zysk_proc = round((zysk / zainwestowano) * 100, 2) if zainwestowano else 0
+        cena_wczoraj = cena / (1 + zmiana / 100) if zmiana != -100 else 0
+        zysk_dzis = round((cena - cena_wczoraj) * info["akcje"], 2)
         suma_wartosc += wartosc
         suma_zainwestowano += zainwestowano
+        suma_zysk_dzis += zysk_dzis
         sygnaly, rsi_d, rsi_w, macd_w, macd_signal_w, macd_hist_w = analizuj_spolke(symbol)
         spolki.append({
             "symbol": symbol,
@@ -41,6 +44,7 @@ def _przelicz_portfel(portfel):
             "wartosc": wartosc,
             "zysk": zysk,
             "zysk_proc": zysk_proc,
+            "zysk_dzis": zysk_dzis,
             "alert_up": info.get("alert_powyzej"),
             "alert_down": info.get("alert_ponizej"),
             "sygnaly": [{"typ": t, "opis": o, "kolor": k} for t, o, k in sygnaly],
@@ -57,6 +61,7 @@ def _przelicz_portfel(portfel):
         "zainwestowano": round(suma_zainwestowano, 2),
         "zysk": suma_zysk,
         "zwrot": suma_zwrot,
+        "zysk_dzis": round(suma_zysk_dzis, 2),
     }
 
 
