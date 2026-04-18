@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+build/
+dist/
+*.spec
+
+# Secrets — nie commituj!
+backend/config.py
+config.py
+
+# Portfolio data (lokalne dane, nie wersjonowane)
+backend/portfel.json
+backend/portfel_usa.json
+portfel.json
+portfel_usa.json
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+*.local
+settings.local.json
