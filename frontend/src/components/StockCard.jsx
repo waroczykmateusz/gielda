@@ -1,3 +1,5 @@
+import { clearAlert } from '../api.js'
+
 const st = {
   card: { background: '#1a1d27', borderRadius: 12, padding: 24, minWidth: 280, flex: 1, border: '1px solid #2a2d3a' },
   row: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 0', borderBottom: '1px solid #2a2d3a' },
@@ -6,12 +8,19 @@ const st = {
   tag: { display: 'inline-block', padding: '3px 8px', borderRadius: 4, margin: 2, fontSize: 12 },
   indicators: { marginTop: 8, display: 'flex', gap: 8, fontSize: 11, flexWrap: 'wrap' },
   badge: { background: '#13151f', padding: '3px 8px', borderRadius: 4 },
+  del: { background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: 13, padding: '0 3px', lineHeight: 1, verticalAlign: 'middle' },
 }
 
-export default function StockCard({ s, waluta }) {
+export default function StockCard({ s, waluta, tab, onRefresh }) {
   const plusZ = s.zysk >= 0
   const plusC = s.zmiana_proc >= 0
   const histPlus = s.macd_hist_w > 0
+
+  const usunAlert = async e => {
+    e.stopPropagation()
+    await clearAlert(tab, s.symbol)
+    onRefresh?.(`Alerty usunięte dla ${s.symbol}`)
+  }
 
   return (
     <div style={st.card}>
@@ -34,10 +43,16 @@ export default function StockCard({ s, waluta }) {
 
       <div style={{ marginTop: 16, fontSize: 12 }}>
         {s.alert_up
-          ? <span style={{ ...st.tag, background: '#1a3a2a', color: '#26c281' }}>alert powyżej: {s.alert_up} {waluta}</span>
+          ? <span style={{ ...st.tag, background: '#1a3a2a', color: '#26c281' }}>
+              alert powyżej: {s.alert_up} {waluta}
+              <button style={st.del} title="Usuń alert" onClick={usunAlert}>✕</button>
+            </span>
           : <span style={{ ...st.tag, background: '#1a1d27', color: '#444' }}>brak alertu powyżej</span>}
         {s.alert_down
-          ? <span style={{ ...st.tag, background: '#3a1a1a', color: '#e74c3c' }}>alert poniżej: {s.alert_down} {waluta}</span>
+          ? <span style={{ ...st.tag, background: '#3a1a1a', color: '#e74c3c' }}>
+              alert poniżej: {s.alert_down} {waluta}
+              <button style={st.del} title="Usuń alert" onClick={usunAlert}>✕</button>
+            </span>
           : <span style={{ ...st.tag, background: '#1a1d27', color: '#444' }}>brak alertu poniżej</span>}
       </div>
 

@@ -31,12 +31,12 @@ export default function PortfolioTab({ tab, waluta }) {
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {selectedStock ? (
-            <StockDetail s={selectedStock} waluta={waluta} onClose={() => setSelected(null)} />
+            <StockDetail s={selectedStock} waluta={waluta} tab={tab} onClose={() => setSelected(null)} onRefresh={(m) => { setMsg(m); load() }} />
           ) : (
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
               {data.spolki.map(s => (
                 <div key={s.symbol} onClick={() => setSelected(s.symbol)} style={{ cursor: 'pointer', minWidth: 280, flex: 1 }}>
-                  <StockCard s={s} waluta={waluta} />
+                  <StockCard s={s} waluta={waluta} tab={tab} onRefresh={(m) => { setMsg(m); load() }} />
                 </div>
               ))}
             </div>

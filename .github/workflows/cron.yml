@@ -3,9 +3,7 @@ name: Cron Jobs
 on:
   schedule:
     - cron: '*/15 7-16 * * 1-5'  # alerts every 15min, 09:00-18:00 PL (07:00-16:00 UTC)
-    - cron: '0 6 * * 1-5'         # morning AI analysis — 08:00 PL (CEST)
-    - cron: '0 8 * * 1-5'         # signals 10:00 PL
-    - cron: '0 12 * * 1-5'        # signals 14:00 PL
+    - cron: '50 4 * * 1-5'        # morning AI analysis — 06:50 PL (CEST)
     - cron: '6 15 * * 1-5'        # daily report — 17:06 PL
   workflow_dispatch:
     inputs:
@@ -17,7 +15,6 @@ on:
         options:
           - alerts
           - morning
-          - signals
           - report
 
 jobs:
@@ -38,35 +35,12 @@ jobs:
   morning:
     if: >
       github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'morning' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1-5'
+      github.event_name == 'schedule' && github.event.schedule == '50 4 * * 1-5'
     runs-on: ubuntu-latest
     steps:
       - name: Call morning endpoint
         run: |
-          curl -s -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/morning" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
-
-  signals-10:
-    if: >
-      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'signals' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 8 * * 1-5'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call signals endpoint (10:00)
-        run: |
-          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/signals" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
-
-  signals-14:
-    if: >
-      github.event_name == 'schedule' && github.event.schedule == '0 12 * * 1-5'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call signals endpoint (14:00)
-        run: |
-          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/signals" \
+          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/morning" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
 

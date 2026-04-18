@@ -35,6 +35,29 @@ export async function fetchDividends() {
   return res.json()
 }
 
+export async function clearAlert(tab, symbol) {
+  const res = await fetch(`${BASE}/alert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tab, symbol, alert_powyzej: null, alert_ponizej: null }),
+  })
+  return res.json()
+}
+
+export async function fetchRecommendation(gpw, usa, korelacje) {
+  const res = await fetch(`${BASE}/recommendation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gpw, usa, korelacje }),
+  })
+  return res.json()
+}
+
+export async function fetchCorrelation() {
+  const res = await fetch(`${BASE}/correlation`)
+  return res.json()
+}
+
 export async function fetchChart(symbol) {
   const params = new URLSearchParams({ symbol })
   const res = await fetch(`${BASE}/chart?${params.toString()}`)

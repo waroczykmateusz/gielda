@@ -130,6 +130,7 @@ def analizuj_konflikt_sygnalu(nazwa, symbol, sygnaly, srednia_cena):
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=200,
+            temperature=0,
             messages=[{"role": "user", "content": f"""Jestes analitykiem technicznym. Spolka {nazwa} ({symbol}) ma sprzeczne sygnaly tygodniowe pogrupowane wedlug wskaznika:
 
 {opis_sygnalow}
