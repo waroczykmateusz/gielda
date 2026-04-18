@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from core import get_base_dir; print\\(get_base_dir\\(\\)\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, '..'\\); from api import _backtest_spolki, wczytaj_portfel_usa; from core import wczytaj_portfel; gpw = wczytaj_portfel\\(\\); usa = wczytaj_portfel_usa\\(\\); print\\('GPW:', list\\(gpw.keys\\(\\)\\)[:3], 'USA:', list\\(usa.keys\\(\\)\\)[:3]\\)\")",
+      "Bash(python backend/api.py)",
+      "Bash(pkill -f \"python backend/api.py\")",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(taskkill /F /FI \"WINDOWTITLE eq python backend*\" netstat -ano)",
+      "Bash(cmd /c \"taskkill /F /PID 20188\")",
+      "Bash(cmd /c \"taskkill /F /PID 1464\")",
+      "Bash(cmd /c \"taskkill /F /PID 2012\")",
+      "Bash(cmd /c \"for /f \\\\\"tokens=5\\\\\" %a in \\('netstat -aon ^| findstr :5000'\\) do taskkill /F /PID %a\")",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
+    ]
+  }
+}

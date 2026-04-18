@@ -23,7 +23,20 @@ export async function setAlert(data) {
   return res.json()
 }
 
-export async function fetchBacktest() {
-  const res = await fetch(`${BASE}/backtest`)
+export async function fetchBacktest(symbol, market) {
+  const params = new URLSearchParams({ symbol })
+  if (market) params.set('market', market)
+  const res = await fetch(`${BASE}/backtest?${params.toString()}`)
   return res.json()
+}
+
+export async function fetchPortfolioSymbols() {
+  const [gpw, usa] = await Promise.all([
+    fetchPortfolio('gpw'),
+    fetchPortfolio('usa'),
+  ])
+  const items = []
+  for (const s of (gpw.spolki || [])) items.push({ symbol: s.symbol, nazwa: s.nazwa, market: 'gpw' })
+  for (const s of (usa.spolki || [])) items.push({ symbol: s.symbol, nazwa: s.nazwa, market: 'usa' })
+  return items
 }

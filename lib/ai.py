@@ -1,54 +1,26 @@
-import anthropic
-import requests
-import schedule
-import time
-import json
 import os
+import time
+import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, ANTHROPIC_API_KEY
-from core import wczytaj_portfel, get_base_dir
 
-# Szukaj portfel_usa.json w kilku miejscach
-for _sciezka in [
-    os.path.join(get_base_dir(), "portfel_usa.json"),
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "portfel_usa.json"),
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfel_usa.json"),
-]:
-    if os.path.exists(_sciezka):
-        PLIK_USA = _sciezka
-        break
-else:
-    PLIK_USA = os.path.join(get_base_dir(), "portfel_usa.json")
-def wczytaj_portfel_usa():
-    if os.path.exists(PLIK_USA):
-        with open(PLIK_USA, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+from .notify import wyslij_telegram
+from .prices import pobierz_dane_dzienne
+from .storage import get_portfolio
 
-def wyslij_telegram(wiadomosc):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    dane = {"chat_id": TELEGRAM_CHAT_ID, "text": wiadomosc, "parse_mode": "HTML"}
-    try:
-        requests.post(url, data=dane, timeout=10)
-    except Exception as e:
-        print(f"Blad Telegram: {e}")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
 
 def pobierz_newsy(nazwa, symbol):
     try:
-        # Usun sufiks gieldowy dla wyszukiwania
         nazwa_szukana = nazwa.replace(" SA", "").replace(" S.A.", "").strip()
         url = f"https://news.google.com/rss/search?q={nazwa_szukana}+akcje&hl=pl&gl=PL&ceid=PL:pl"
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(url, headers=headers, timeout=10)
-
-        # Parsuj RSS
-        import xml.etree.ElementTree as ET
         root = ET.fromstring(r.content)
         items = root.findall(".//item")[:3]
-
         if not items:
             return "Brak najnowszych newsow."
-
         teksty = []
         for item in items:
             title = item.find("title")
@@ -58,9 +30,10 @@ def pobierz_newsy(nazwa, symbol):
     except Exception as e:
         return f"Nie udalo sie pobrac newsow: {e}"
 
+
 def analizuj_ai(nazwa, symbol, srednia_cena, akcje, newsy):
     try:
-        from core import pobierz_dane_dzienne
+        import anthropic
         cena_aktualna, zmiana_dzis = pobierz_dane_dzienne(symbol)
         if cena_aktualna is None:
             cena_aktualna = "nieznana"
@@ -77,7 +50,7 @@ def analizuj_ai(nazwa, symbol, srednia_cena, akcje, newsy):
 
 Dane inwestora:
 - Liczba akcji: {akcje}
-- Srednia cena zakupu: {srednia_cena} 
+- Srednia cena zakupu: {srednia_cena}
 - Aktualna cena rynkowa: {cena_aktualna}
 - Zmiana dzisiaj: {zmiana_dzis}%
 - Aktualny zysk/strata: {zysk} ({zysk_proc}%)
@@ -101,23 +74,22 @@ Odpowiedz po polsku, zwiezle i konkretnie."""
     except Exception as e:
         return f"Blad analizy AI: {e}"
 
+
 def dzienna_analiza():
     if datetime.now().weekday() >= 5:
-        print("Weekend - pomijam analize AI.")
         return
 
-    print(f"\n[{datetime.now().strftime('%H:%M')}] Uruchamiam analize AI...")
-
-    gpw = wczytaj_portfel()
-    usa = wczytaj_portfel_usa()
+    gpw = get_portfolio("gpw")
+    usa = get_portfolio("usa")
     wszystkie = {**gpw, **usa}
 
-    wyslij_telegram(f"🤖 <b>Poranna analiza AI — {datetime.now().strftime('%d.%m.%Y')}</b>\nAnalizuje {len(wszystkie)} spolek...")
+    wyslij_telegram(
+        f"🤖 <b>Poranna analiza AI — {datetime.now().strftime('%d.%m.%Y')}</b>\n"
+        f"Analizuje {len(wszystkie)} spolek..."
+    )
 
     for symbol, info in wszystkie.items():
         nazwa = info["nazwa"]
-        print(f"  Analizuje: {nazwa}...")
-
         newsy = pobierz_newsy(nazwa, symbol)
         analiza = analizuj_ai(nazwa, symbol, info["srednia_cena"], info["akcje"], newsy)
 
@@ -132,15 +104,6 @@ def dzienna_analiza():
             wyslij_telegram(f"📈 <b>{nazwa}</b> ({symbol})\n\n<i>Newsy:</i>\n{newsy}")
             time.sleep(1)
             wyslij_telegram(f"<b>Analiza AI — {nazwa}:</b>\n{analiza}")
-        time.sleep(2)
+        time.sleep(1)
 
     wyslij_telegram("✅ <b>Analiza AI zakonczona.</b>")
-    print("  Analiza zakonczona.")
-
-if __name__ == "__main__":
-    dzienna_analiza()
-    schedule.every().day.at("08:00").do(dzienna_analiza)
-    print("\nSkrypt analizy AI dziala. Ctrl+C zeby zatrzymac.\n")
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
