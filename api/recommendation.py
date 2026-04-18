@@ -69,4 +69,5 @@ def recommendation():
         )
         return jsonify({'rekomendacja': msg.content[0].text})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
