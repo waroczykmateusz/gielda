@@ -4,11 +4,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, jsonify, request
-import anthropic
 
 app = Flask(__name__)
-
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 
 
 def _buduj_prompt(gpw, usa, korelacje):
@@ -65,14 +62,20 @@ Bądź konkretny i bezpośredni. Nie powtarzaj danych wejściowych."""
 @app.route('/api/recommendation', methods=['POST'])
 def recommendation():
     try:
-        body = request.get_json()
+        import anthropic
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'Brak ANTHROPIC_API_KEY'}), 500
+
+        body = request.get_json(force=True, silent=True) or {}
         gpw = body.get('gpw', {})
         usa = body.get('usa', {})
         korelacje = body.get('korelacje', {})
 
         prompt = _buduj_prompt(gpw, usa, korelacje)
 
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model='claude-sonnet-4-6',
             max_tokens=800,
