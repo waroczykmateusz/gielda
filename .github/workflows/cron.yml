@@ -42,7 +42,7 @@ jobs:
     steps:
       - name: Call morning endpoint
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/morning" \
+          curl -s -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/morning" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   signals-10:
