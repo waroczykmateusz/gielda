@@ -2,53 +2,11 @@ import os
 from datetime import datetime
 
 from .notify import wyslij_telegram
-from .prices import pobierz_cene
+from .prices import pobierz_dane_dzienne
 from .storage import get_portfolio
 
 
-def _sekcja(portfel, waluta):
-    linie = []
-    suma_w = suma_z = 0
-    for symbol, info in portfel.items():
-        cena = pobierz_cene(symbol)
-        if cena is None:
-            continue
-        w = round(cena * info["akcje"], 2)
-        z = round(info["srednia_cena"] * info["akcje"], 2)
-        zysk = round(w - z, 2)
-        proc = round((zysk / z) * 100, 2) if z else 0
-        emoji = "🟢" if zysk >= 0 else "🔴"
-        linie.append(
-            f"{emoji} <b>{info['nazwa']}</b>: {cena} {waluta} "
-            f"({zysk:+.2f} {waluta} / {proc:+.1f}%)"
-        )
-        suma_w += w
-        suma_z += z
-    suma_zysk = round(suma_w - suma_z, 2)
-    suma_zwrot = round((suma_zysk / suma_z) * 100, 2) if suma_z else 0
-    emoji_t = "🟢" if suma_zysk >= 0 else "🔴"
-    linie.append(
-        f"\n{emoji_t} <b>Lacznie:</b> {round(suma_w, 2)} {waluta} "
-        f"({suma_zysk:+.2f} {waluta} / {suma_zwrot:+.1f}%)"
-    )
-    return linie
-
-
-def dzienny_raport():
-    teraz = datetime.now()
-    if teraz.weekday() >= 5:
-        return
-
-    linie = [f"📊 <b>Podsumowanie {teraz.strftime('%d.%m.%Y')}</b>\n"]
-    linie.append("🇵🇱 <b>GPW</b>")
-    linie.extend(_sekcja(get_portfolio("gpw"), "zl"))
-    linie.append("\n🇺🇸 <b>USA</b>")
-    linie.extend(_sekcja(get_portfolio("usa"), "$"))
-    wyslij_telegram("\n".join(linie))
-
-
 def _wskazniki_bulk(symbole):
-    """Pobiera RSI, MACD i zmianę dzienną dla listy symboli jednym requestem."""
     import yfinance as yf
     import pandas as pd
 
@@ -69,12 +27,10 @@ def _wskazniki_bulk(symbole):
             if len(c) < 30:
                 continue
 
-            # RSI 14
             delta = c.diff()
             rs = delta.clip(lower=0).rolling(14).mean() / (-delta.clip(upper=0)).rolling(14).mean()
             rsi = round(float((100 - 100 / (1 + rs)).iloc[-1]), 1)
 
-            # MACD
             ema12 = c.ewm(span=12, adjust=False).mean()
             ema26 = c.ewm(span=26, adjust=False).mean()
             macd = ema12 - ema26
@@ -87,70 +43,91 @@ def _wskazniki_bulk(symbole):
                 elif macd.iloc[-1] < sig.iloc[-1] and macd.iloc[-2] >= sig.iloc[-2]:
                     macd_cross = "UWAGA"
 
-            # zmiana dzienna %
+            sma50 = round(float(c.rolling(50).mean().iloc[-1]), 2) if len(c) >= 50 else None
+            sma200 = round(float(c.rolling(200).mean().iloc[-1]), 2) if len(c) >= 200 else None
+
             zmiana = round(float((c.iloc[-1] - c.iloc[-2]) / c.iloc[-2] * 100), 2) if len(c) >= 2 else 0.0
 
-            wyniki[symbol] = {"rsi": rsi, "macd_hist": hist, "macd_cross": macd_cross, "zmiana": zmiana}
+            wyniki[symbol] = {
+                "rsi": rsi,
+                "macd_hist": hist,
+                "macd_cross": macd_cross,
+                "sma50": sma50,
+                "sma200": sma200,
+                "zmiana": zmiana,
+            }
     except Exception as e:
         print(f"Blad wskaznikow bulk: {e}")
     return wyniki
 
 
-def rekomendacja_dzienna():
-    if datetime.now().weekday() >= 5:
-        return
+def _sekcja_dzienna(portfel, waluta, wskazniki):
+    linie = []
+    suma_dzienny_pl = 0.0
 
-    gpw = get_portfolio("gpw")
-    usa = get_portfolio("usa")
-    wszystkie_symbole = list(gpw.keys()) + list(usa.keys())
+    for symbol, info in portfel.items():
+        cena, zmiana_dzis = pobierz_dane_dzienne(symbol)
+        if cena is None:
+            continue
+        wartosc = round(cena * info["akcje"], 2)
+        dzienny_pl = round(wartosc * zmiana_dzis / 100, 2)
+        suma_dzienny_pl += dzienny_pl
+        emoji = "🟢" if zmiana_dzis >= 0 else "🔴"
+        linie.append(
+            f"{emoji} <b>{info['nazwa']}</b>: {zmiana_dzis:+.2f}% ({dzienny_pl:+.2f} {waluta})"
+        )
 
-    wskazniki = _wskazniki_bulk(wszystkie_symbole)
+    if linie:
+        suma_emoji = "📈" if suma_dzienny_pl >= 0 else "📉"
+        linie.append(f"\n{suma_emoji} <b>Łącznie dziś:</b> {suma_dzienny_pl:+.2f} {waluta}")
 
-    def opis(portfel, waluta):
+    return linie
+
+
+def _rekomendacja_ai(portfel, waluta, wskazniki, rynek_label):
+    def opis():
         linie = []
         for symbol, info in portfel.items():
-            cena = pobierz_cene(symbol)
+            cena, zmiana = pobierz_dane_dzienne(symbol)
             if cena is None:
                 continue
-            z = round(info["srednia_cena"] * info["akcje"], 2)
-            w = round(cena * info["akcje"], 2)
-            proc = round((w - z) / z * 100, 2) if z else 0
             wsk = wskazniki.get(symbol, {})
             rsi = wsk.get("rsi", "?")
             hist = wsk.get("macd_hist", "?")
             cross = f" MACD={wsk['macd_cross']}" if wsk.get("macd_cross") else ""
-            zmiana = wsk.get("zmiana", 0)
+            sma50 = wsk.get("sma50", "?")
+            sma200 = wsk.get("sma200", "?")
+            zm = wsk.get("zmiana", zmiana or 0)
+            w = round(cena * info["akcje"], 2)
+            z = round(info["srednia_cena"] * info["akcje"], 2)
+            proc = round((w - z) / z * 100, 2) if z else 0
             linie.append(
-                f"{symbol}: cena={cena} P&L={proc:+.1f}% "
-                f"dziś={zmiana:+.1f}% RSI={rsi} MACDhist={hist}{cross}"
+                f"{symbol}: cena={cena} akcje={info['akcje']} P&L={proc:+.1f}% "
+                f"dziś={zm:+.1f}% RSI={rsi} MACDhist={hist}{cross} SMA50={sma50} SMA200={sma200}"
             )
         return "\n".join(linie) or "brak"
 
     prompt = f"""Jesteś polskim doradcą inwestycyjnym. Na podstawie danych z dzisiejszego zamknięcia sesji podaj KONKRETNE rekomendacje na jutro.
 
-GPW ({waluta_gpw}):
-{opis(gpw, 'zł')}
+{rynek_label} ({waluta}):
+{opis()}
 
-USA ($):
-{opis(usa, '$')}
-
-Legenda: P&L=zysk od zakupu, dziś=zmiana sesji, RSI<30 wyprzedana/>70 wykupiona, MACDhist>0 trend wzrostowy, MACD=KUP/UWAGA crossover
+Legenda: P&L=zysk od zakupu, dziś=zmiana sesji, RSI<30 wyprzedana/>70 wykupiona, MACDhist>0 trend wzrostowy, MACD=KUP/UWAGA crossover, SMA50/200=średnie kroczące
 
 Napisz krótko po polsku (max 200 słów):
 **OCENA DNIA**: 1-2 zdania co się działo w portfelu
 **NA JUTRO**: 2-3 konkretne punkty (co dokupić/sprzedać/obserwować z uzasadnieniem)
 **PRIORYTET**: jedna najważniejsza akcja
 
-Bez wstępu, konkretnie.""".replace("{waluta_gpw}", "zł")
+Bez wstępu, konkretnie."""
 
     try:
         import anthropic
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            return
+            return None
         client = anthropic.Anthropic(api_key=api_key)
 
-        # 3 niezależne analizy z lekką losowością
         analizy = []
         for _ in range(3):
             msg = client.messages.create(
@@ -161,10 +138,9 @@ Bez wstępu, konkretnie.""".replace("{waluta_gpw}", "zł")
             )
             analizy.append(msg.content[0].text.strip())
 
-        # 4. wywołanie — synteza konsensusu
-        synteza_prompt = f"""Poniżej znajdują się 3 niezależne analizy portfela inwestycyjnego wygenerowane przez AI.
-Twoim zadaniem jest wyciągnąć z nich KONSENSUS — czyli te wnioski i rekomendacje, które powtarzają się lub są ze sobą zgodne.
-Zignoruj sprzeczności i skrajne opinie, które pojawiają się tylko raz.
+        synteza_prompt = f"""Poniżej znajdują się 3 niezależne analizy portfela inwestycyjnego.
+Wyciągnij KONSENSUS — wnioski i rekomendacje które powtarzają się lub są zgodne.
+Zignoruj sprzeczności i opinie pojawiające się tylko raz.
 
 === ANALIZA 1 ===
 {analizy[0]}
@@ -175,10 +151,10 @@ Zignoruj sprzeczności i skrajne opinie, które pojawiają się tylko raz.
 === ANALIZA 3 ===
 {analizy[2]}
 
-Napisz FINALNĄ rekomendację po polsku (max 200 słów) w formacie:
+Napisz FINALNĄ rekomendację po polsku (max 200 słów):
 **OCENA DNIA**: najczęściej powtarzająca się ocena
-**NA JUTRO**: tylko te punkty które pojawiły się w co najmniej 2 analizach
-**PRIORYTET**: jedna akcja zgodna z większością analiz
+**NA JUTRO**: tylko punkty z co najmniej 2 analiz
+**PRIORYTET**: jedna akcja zgodna z większością
 
 Konkretnie, bez wstępu."""
 
@@ -188,7 +164,45 @@ Konkretnie, bez wstępu."""
             temperature=0,
             messages=[{"role": "user", "content": synteza_prompt}],
         )
-        tekst = final.content[0].text.strip()
-        wyslij_telegram(f"🤖 <b>Rekomendacja AI — {datetime.now().strftime('%d.%m.%Y')}</b>\n\n{tekst}")
+        return final.content[0].text.strip()
     except Exception as e:
         print(f"Blad rekomendacji AI: {e}")
+        return None
+
+
+def raport_gpw():
+    if datetime.now().weekday() >= 5:
+        return
+
+    portfel = get_portfolio("gpw")
+    if not portfel:
+        return
+
+    wskazniki = _wskazniki_bulk(list(portfel.keys()))
+
+    linie = [f"📊 <b>GPW — {datetime.now().strftime('%d.%m.%Y')}</b>\n"]
+    linie.extend(_sekcja_dzienna(portfel, "zł", wskazniki))
+    wyslij_telegram("\n".join(linie))
+
+    rekomen = _rekomendacja_ai(portfel, "zł", wskazniki, "GPW")
+    if rekomen:
+        wyslij_telegram(f"🤖 <b>Rekomendacja AI GPW — {datetime.now().strftime('%d.%m.%Y')}</b>\n\n{rekomen}")
+
+
+def raport_usa():
+    if datetime.now().weekday() >= 5:
+        return
+
+    portfel = get_portfolio("usa")
+    if not portfel:
+        return
+
+    wskazniki = _wskazniki_bulk(list(portfel.keys()))
+
+    linie = [f"📊 <b>USA — {datetime.now().strftime('%d.%m.%Y')}</b>\n"]
+    linie.extend(_sekcja_dzienna(portfel, "$", wskazniki))
+    wyslij_telegram("\n".join(linie))
+
+    rekomen = _rekomendacja_ai(portfel, "$", wskazniki, "USA")
+    if rekomen:
+        wyslij_telegram(f"🤖 <b>Rekomendacja AI USA — {datetime.now().strftime('%d.%m.%Y')}</b>\n\n{rekomen}")

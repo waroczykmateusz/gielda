@@ -11,10 +11,11 @@
     { "source": "/api/dividends", "destination": "/api/dividends" },
     { "source": "/api/chart", "destination": "/api/chart" },
     { "source": "/api/correlation", "destination": "/api/correlation" },
-    { "source": "/api/recommendation", "destination": "/api/recommendation" }
+    { "source": "/api/recommendation", "destination": "/api/recommendation" },
+    { "source": "/api/cron/morning", "destination": "/api/cron/morning" },
+    { "source": "/api/cron/alerts", "destination": "/api/cron/alerts" },
+    { "source": "/api/cron/gpw_report", "destination": "/api/cron/gpw_report" },
+    { "source": "/api/cron/usa_report", "destination": "/api/cron/usa_report" }
   ],
-  "crons": [
-    { "path": "/api/cron/morning", "schedule": "0 6 * * 1-5" },
-    { "path": "/api/cron/evening", "schedule": "0 15 * * 1-5" }
-  ]
+  "crons": []
 }
