@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from .notify import wyslij_telegram
+from .notify import wyslij_telegram, wyslij_telegram_dlugi
 from .prices import pobierz_cene
 from .storage import get_portfolio
 
@@ -34,17 +34,24 @@ def _sekcja(portfel, waluta):
     return linie
 
 
-def dzienny_raport():
+def dzienny_raport(market=None):
     teraz = datetime.now()
     if teraz.weekday() >= 5:
         return
 
-    linie = [f"📊 <b>Podsumowanie {teraz.strftime('%d.%m.%Y')}</b>\n"]
-    linie.append("🇵🇱 <b>GPW</b>")
-    linie.extend(_sekcja(get_portfolio("gpw"), "zl"))
-    linie.append("\n🇺🇸 <b>USA</b>")
-    linie.extend(_sekcja(get_portfolio("usa"), "$"))
-    wyslij_telegram("\n".join(linie))
+    if market == "gpw":
+        linie = [f"🇵🇱 <b>Zamknięcie GPW — {teraz.strftime('%d.%m.%Y')}</b>\n"]
+        linie.extend(_sekcja(get_portfolio("gpw"), "zł"))
+    elif market == "usa":
+        linie = [f"🇺🇸 <b>Zamknięcie USA — {teraz.strftime('%d.%m.%Y')}</b>\n"]
+        linie.extend(_sekcja(get_portfolio("usa"), "$"))
+    else:
+        linie = [f"📊 <b>Podsumowanie {teraz.strftime('%d.%m.%Y')}</b>\n"]
+        linie.append("🇵🇱 <b>GPW</b>")
+        linie.extend(_sekcja(get_portfolio("gpw"), "zł"))
+        linie.append("\n🇺🇸 <b>USA</b>")
+        linie.extend(_sekcja(get_portfolio("usa"), "$"))
+    wyslij_telegram_dlugi("\n".join(linie))
 
 
 def _wskazniki_bulk(symbole):
@@ -96,43 +103,38 @@ def _wskazniki_bulk(symbole):
     return wyniki
 
 
-def rekomendacja_dzienna():
+def rekomendacja_dzienna(market):
     if datetime.now().weekday() >= 5:
         return
 
-    gpw = get_portfolio("gpw")
-    usa = get_portfolio("usa")
-    wszystkie_symbole = list(gpw.keys()) + list(usa.keys())
+    portfel = get_portfolio(market)
+    waluta = "zł" if market == "gpw" else "$"
+    rynek_label = "GPW" if market == "gpw" else "USA"
+    wskazniki = _wskazniki_bulk(list(portfel.keys()))
 
-    wskazniki = _wskazniki_bulk(wszystkie_symbole)
+    linie_opisu = []
+    for symbol, info in portfel.items():
+        cena = pobierz_cene(symbol)
+        if cena is None:
+            continue
+        z = round(info["srednia_cena"] * info["akcje"], 2)
+        w = round(cena * info["akcje"], 2)
+        proc = round((w - z) / z * 100, 2) if z else 0
+        wsk = wskazniki.get(symbol, {})
+        rsi = wsk.get("rsi", "?")
+        hist = wsk.get("macd_hist", "?")
+        cross = f" MACD={wsk['macd_cross']}" if wsk.get("macd_cross") else ""
+        zmiana = wsk.get("zmiana", 0)
+        linie_opisu.append(
+            f"{symbol}: cena={cena} P&L={proc:+.1f}% "
+            f"dziś={zmiana:+.1f}% RSI={rsi} MACDhist={hist}{cross}"
+        )
+    opis_portfela = "\n".join(linie_opisu) or "brak danych"
 
-    def opis(portfel, waluta):
-        linie = []
-        for symbol, info in portfel.items():
-            cena = pobierz_cene(symbol)
-            if cena is None:
-                continue
-            z = round(info["srednia_cena"] * info["akcje"], 2)
-            w = round(cena * info["akcje"], 2)
-            proc = round((w - z) / z * 100, 2) if z else 0
-            wsk = wskazniki.get(symbol, {})
-            rsi = wsk.get("rsi", "?")
-            hist = wsk.get("macd_hist", "?")
-            cross = f" MACD={wsk['macd_cross']}" if wsk.get("macd_cross") else ""
-            zmiana = wsk.get("zmiana", 0)
-            linie.append(
-                f"{symbol}: cena={cena} P&L={proc:+.1f}% "
-                f"dziś={zmiana:+.1f}% RSI={rsi} MACDhist={hist}{cross}"
-            )
-        return "\n".join(linie) or "brak"
+    prompt = f"""Jesteś polskim doradcą inwestycyjnym. Na podstawie danych z zamknięcia sesji {rynek_label} podaj KONKRETNE rekomendacje na jutro.
 
-    prompt = f"""Jesteś polskim doradcą inwestycyjnym. Na podstawie danych z dzisiejszego zamknięcia sesji podaj KONKRETNE rekomendacje na jutro.
-
-GPW ({waluta_gpw}):
-{opis(gpw, 'zł')}
-
-USA ($):
-{opis(usa, '$')}
+{rynek_label} ({waluta}):
+{opis_portfela}
 
 Legenda: P&L=zysk od zakupu, dziś=zmiana sesji, RSI<30 wyprzedana/>70 wykupiona, MACDhist>0 trend wzrostowy, MACD=KUP/UWAGA crossover
 
@@ -141,7 +143,7 @@ Napisz krótko po polsku (max 200 słów):
 **NA JUTRO**: 2-3 konkretne punkty (co dokupić/sprzedać/obserwować z uzasadnieniem)
 **PRIORYTET**: jedna najważniejsza akcja
 
-Bez wstępu, konkretnie.""".replace("{waluta_gpw}", "zł")
+Bez wstępu, konkretnie."""
 
     try:
         import anthropic
@@ -150,7 +152,6 @@ Bez wstępu, konkretnie.""".replace("{waluta_gpw}", "zł")
             return
         client = anthropic.Anthropic(api_key=api_key)
 
-        # 3 niezależne analizy z lekką losowością
         analizy = []
         for _ in range(3):
             msg = client.messages.create(
@@ -161,10 +162,8 @@ Bez wstępu, konkretnie.""".replace("{waluta_gpw}", "zł")
             )
             analizy.append(msg.content[0].text.strip())
 
-        # 4. wywołanie — synteza konsensusu
-        synteza_prompt = f"""Poniżej znajdują się 3 niezależne analizy portfela inwestycyjnego wygenerowane przez AI.
-Twoim zadaniem jest wyciągnąć z nich KONSENSUS — czyli te wnioski i rekomendacje, które powtarzają się lub są ze sobą zgodne.
-Zignoruj sprzeczności i skrajne opinie, które pojawiają się tylko raz.
+        synteza_prompt = f"""Poniżej znajdują się 3 niezależne analizy portfela {rynek_label} wygenerowane przez AI.
+Wyciągnij KONSENSUS — wnioski i rekomendacje które się powtarzają. Zignoruj sprzeczności pojawiające się tylko raz.
 
 === ANALIZA 1 ===
 {analizy[0]}
@@ -175,10 +174,10 @@ Zignoruj sprzeczności i skrajne opinie, które pojawiają się tylko raz.
 === ANALIZA 3 ===
 {analizy[2]}
 
-Napisz FINALNĄ rekomendację po polsku (max 200 słów) w formacie:
+Napisz FINALNĄ rekomendację po polsku (max 200 słów):
 **OCENA DNIA**: najczęściej powtarzająca się ocena
-**NA JUTRO**: tylko te punkty które pojawiły się w co najmniej 2 analizach
-**PRIORYTET**: jedna akcja zgodna z większością analiz
+**NA JUTRO**: tylko punkty z co najmniej 2 analiz
+**PRIORYTET**: jedna akcja zgodna z większością
 
 Konkretnie, bez wstępu."""
 
@@ -189,6 +188,7 @@ Konkretnie, bez wstępu."""
             messages=[{"role": "user", "content": synteza_prompt}],
         )
         tekst = final.content[0].text.strip()
-        wyslij_telegram(f"🤖 <b>Rekomendacja AI — {datetime.now().strftime('%d.%m.%Y')}</b>\n\n{tekst}")
+        flag = "🇵🇱" if market == "gpw" else "🇺🇸"
+        wyslij_telegram(f"{flag} <b>Rekomendacja AI {rynek_label} — {datetime.now().strftime('%d.%m.%Y')}</b>\n\n{tekst}")
     except Exception as e:
-        print(f"Blad rekomendacji AI: {e}")
+        print(f"Blad rekomendacji AI {market}: {e}")

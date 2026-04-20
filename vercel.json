@@ -15,6 +15,7 @@
   ],
   "crons": [
     { "path": "/api/cron/morning", "schedule": "0 6 * * 1-5" },
-    { "path": "/api/cron/evening", "schedule": "0 15 * * 1-5" }
+    { "path": "/api/cron/gpw_close", "schedule": "6 15 * * 1-5" },
+    { "path": "/api/cron/usa_close", "schedule": "0 20 * * 1-5" }
   ]
 }

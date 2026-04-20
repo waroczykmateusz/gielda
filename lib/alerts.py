@@ -47,7 +47,9 @@ def _sprawdz_alerty_dla(spolki, market):
                 mark_sent(klucz, cena)
 
 
-def sprawdz_alerty():
+def sprawdz_alerty(market=None):
     cleanup_expired()
-    _sprawdz_alerty_dla(get_portfolio("gpw"), "gpw")
-    _sprawdz_alerty_dla(get_portfolio("usa"), "usa")
+    if market in (None, "gpw"):
+        _sprawdz_alerty_dla(get_portfolio("gpw"), "gpw")
+    if market in (None, "usa"):
+        _sprawdz_alerty_dla(get_portfolio("usa"), "usa")
