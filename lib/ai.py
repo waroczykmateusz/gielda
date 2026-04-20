@@ -145,17 +145,9 @@ def dzienna_analiza():
         wsk = _wskazniki(symbol)
         analiza = analizuj_ai(nazwa, symbol, info["srednia_cena"], info["akcje"], newsy, wsk)
 
-        wiadomosc = (
-            f"📈 <b>{nazwa}</b> ({symbol})\n\n"
-            f"<i>Newsy:</i>\n{newsy}\n\n"
-            f"<b>Analiza AI:</b>\n{analiza}"
-        )
-        if len(wiadomosc) <= 4000:
-            wyslij_telegram(wiadomosc)
-        else:
-            wyslij_telegram(f"📈 <b>{nazwa}</b> ({symbol})\n\n<i>Newsy:</i>\n{newsy}")
-            time.sleep(1)
-            wyslij_telegram(f"<b>Analiza AI — {nazwa}:</b>\n{analiza}")
+        wyslij_telegram(f"📈 <b>{nazwa}</b> ({symbol})\n\n<i>Newsy:</i>\n{newsy}")
+        time.sleep(1)
+        wyslij_telegram(f"<b>Analiza AI — {nazwa}:</b>\n{analiza}")
         time.sleep(1)
 
     wyslij_telegram("✅ <b>Analiza AI zakonczona.</b>")
