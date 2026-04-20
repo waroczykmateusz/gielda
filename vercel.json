@@ -13,5 +13,8 @@
     { "source": "/api/correlation", "destination": "/api/correlation" },
     { "source": "/api/recommendation", "destination": "/api/recommendation" }
   ],
-  "crons": []
+  "crons": [
+    { "path": "/api/cron/morning", "schedule": "0 6 * * 1-5" },
+    { "path": "/api/cron/evening", "schedule": "0 15 * * 1-5" }
+  ]
 }
