@@ -13,17 +13,10 @@ def pobierz_cene(symbol):
 def pobierz_dane_dzienne(symbol):
     try:
         import yfinance as yf
-        t = yf.Ticker(symbol)
-        h = t.history(period="5d", interval="1m")
-        if h.empty:
-            return None, None
-        cena = round(float(h["Close"].iloc[-1]), 2)
-        today = h.index[-1].date()
-        poprzedni_dzien = h[h.index.date < today]
-        if poprzedni_dzien.empty:
-            return cena, None
-        poprzednia = round(float(poprzedni_dzien["Close"].iloc[-1]), 2)
-        zmiana = round((cena - poprzednia) / poprzednia * 100, 2)
+        fi = yf.Ticker(symbol).fast_info
+        cena = round(float(fi.last_price), 2)
+        poprzednia = round(float(fi.previous_close), 2)
+        zmiana = round((cena - poprzednia) / poprzednia * 100, 2) if poprzednia else None
         return cena, zmiana
     except Exception:
         return None, None
