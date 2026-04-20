@@ -1,8 +1,11 @@
+def _ticker(symbol):
+    import yfinance as yf
+    return yf.Ticker(symbol)
+
+
 def pobierz_cene(symbol):
     try:
-        import yfinance as yf
-        t = yf.Ticker(symbol)
-        h = t.history(period="1d", interval="1m")
+        h = _ticker(symbol).history(period="1d", interval="5m")
         if h.empty:
             return None
         return round(float(h["Close"].iloc[-1]), 2)
@@ -12,14 +15,16 @@ def pobierz_cene(symbol):
 
 def pobierz_dane_dzienne(symbol):
     try:
-        import yfinance as yf
-        t = yf.Ticker(symbol)
-        h = t.history(period="5d", interval="1d")
-        if len(h) < 2:
+        h_intra = _ticker(symbol).history(period="1d", interval="5m")
+        h_daily = _ticker(symbol).history(period="5d", interval="1d")
+        if h_intra.empty and h_daily.empty:
             return None, None
-        cena = round(float(h["Close"].iloc[-1]), 2)
-        poprzednia = round(float(h["Close"].iloc[-2]), 2)
-        zmiana = round((cena - poprzednia) / poprzednia * 100, 2)
+        cena = round(float(h_intra["Close"].iloc[-1]), 2) if not h_intra.empty else round(float(h_daily["Close"].iloc[-1]), 2)
+        if len(h_daily) >= 2:
+            poprzednia = round(float(h_daily["Close"].iloc[-2]), 2)
+            zmiana = round((cena - poprzednia) / poprzednia * 100, 2) if poprzednia else None
+        else:
+            zmiana = None
         return cena, zmiana
     except Exception:
         return None, None
