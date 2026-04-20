@@ -2,9 +2,10 @@ name: Cron Jobs
 
 on:
   schedule:
-    - cron: '*/15 7-16 * * 1-5'  # alerts every 15min, 09:00-18:00 PL (07:00-16:00 UTC)
-    - cron: '50 4 * * 1-5'        # morning AI analysis — 06:50 PL (CEST)
-    - cron: '6 15 * * 1-5'        # daily report — 17:06 PL
+    - cron: '50 4 * * 1-5'        # morning news — 06:50 PL (CEST) / 05:50 (CET)
+    - cron: '15 15 * * 1-5'       # GPW report — 17:15 PL (CEST) / 16:15 (CET)
+    - cron: '0 21 * * 1-5'        # USA report — 23:00 PL (CEST) / 22:00 (CET)
+    - cron: '*/15 7-16 * * 1-5'   # price alerts every 15min, 09:00-18:00 PL (CEST)
   workflow_dispatch:
     inputs:
       job:
@@ -15,23 +16,10 @@ on:
         options:
           - alerts
           - morning
-          - report
+          - gpw_report
+          - usa_report
 
 jobs:
-  alerts:
-    if: >
-      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'alerts' ||
-      github.event_name == 'schedule' && (
-        github.event.schedule == '*/15 7-16 * * 1-5'
-      )
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call alerts endpoint
-        run: |
-          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/alerts" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
-
   morning:
     if: >
       github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'morning' ||
@@ -44,14 +32,38 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
 
-  report:
+  gpw_report:
     if: >
-      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'report' ||
-      github.event_name == 'schedule' && github.event.schedule == '6 15 * * 1-5'
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'gpw_report' ||
+      github.event_name == 'schedule' && github.event.schedule == '15 15 * * 1-5'
     runs-on: ubuntu-latest
     steps:
-      - name: Call report endpoint
+      - name: Call GPW report endpoint
         run: |
-          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/report" \
+          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/gpw_report" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
+
+  usa_report:
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'usa_report' ||
+      github.event_name == 'schedule' && github.event.schedule == '0 21 * * 1-5'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call USA report endpoint
+        run: |
+          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/usa_report" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
+
+  alerts:
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'alerts' ||
+      github.event_name == 'schedule' && github.event.schedule == '*/15 7-16 * * 1-5'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call alerts endpoint
+        run: |
+          curl -sf -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/alerts" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}"
