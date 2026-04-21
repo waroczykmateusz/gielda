@@ -53,6 +53,40 @@ export async function fetchRecommendation(gpw, usa, korelacje) {
   return res.json()
 }
 
+export async function streamRecommendation(symbol, market, onChunk, onDone, onError) {
+  try {
+    const params = new URLSearchParams({ symbol, market })
+    const res = await fetch(`${BASE}/recommend?${params.toString()}`)
+    if (!res.ok) { onError(`HTTP ${res.status}`); return }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) { onDone(); break }
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const raw = line.slice(6)
+        if (raw === '[DONE]') { onDone(); return }
+        try {
+          const parsed = JSON.parse(raw)
+          if (parsed.error) { onError(parsed.error); return }
+          if (parsed.text) onChunk(parsed.text)
+        } catch {}
+      }
+    }
+  } catch (e) {
+    onError(e.message)
+  }
+}
+
 export async function fetchCorrelation() {
   const res = await fetch(`${BASE}/correlation`)
   return res.json()

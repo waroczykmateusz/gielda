@@ -12,6 +12,7 @@
     { "source": "/api/chart", "destination": "/api/chart" },
     { "source": "/api/correlation", "destination": "/api/correlation" },
     { "source": "/api/recommendation", "destination": "/api/recommendation" },
+    { "source": "/api/recommend", "destination": "/api/recommend" },
     { "source": "/api/cron/morning", "destination": "/api/cron/morning" },
     { "source": "/api/cron/alerts", "destination": "/api/cron/alerts" },
     { "source": "/api/cron/gpw_report", "destination": "/api/cron/gpw_report" },
