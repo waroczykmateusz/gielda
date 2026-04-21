@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { fetchChart, clearAlert } from '../api.js'
+import { useState, useEffect, useRef } from 'react'
+import { fetchChart, clearAlert, streamRecommendation } from '../api.js'
 import StockChart from './StockChart.jsx'
 
 const st = {
@@ -20,7 +20,12 @@ const btnDel = { background: 'transparent', border: 'none', color: '#555', curso
 
 export default function StockDetail({ s, waluta, tab, onClose, onRefresh }) {
   const [chart, setChart] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [chartLoading, setChartLoading] = useState(true)
+  const [aiText, setAiText] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiDone, setAiDone] = useState(false)
+  const aiRef = useRef(null)
+  const abortRef = useRef(false)
 
   const usunAlert = async () => {
     await clearAlert(tab, s.symbol)
@@ -28,13 +33,47 @@ export default function StockDetail({ s, waluta, tab, onClose, onRefresh }) {
   }
 
   useEffect(() => {
-    setLoading(true)
+    setChartLoading(true)
     setChart(null)
     fetchChart(s.symbol).then(d => {
       setChart(d)
-      setLoading(false)
+      setChartLoading(false)
     })
+    setAiText('')
+    setAiDone(false)
+    setAiLoading(false)
+    abortRef.current = true
   }, [s.symbol])
+
+  useEffect(() => {
+    if (aiText && aiRef.current) {
+      aiRef.current.scrollTop = aiRef.current.scrollHeight
+    }
+  }, [aiText])
+
+  const generateRecommendation = () => {
+    abortRef.current = false
+    setAiText('')
+    setAiDone(false)
+    setAiLoading(true)
+
+    streamRecommendation(
+      s.symbol,
+      tab,
+      (chunk) => {
+        if (abortRef.current) return
+        setAiText(prev => prev + chunk)
+      },
+      () => {
+        if (!abortRef.current) setAiDone(true)
+        setAiLoading(false)
+      },
+      (err) => {
+        if (!abortRef.current) setAiText(`Błąd: ${err}`)
+        setAiLoading(false)
+      },
+    )
+  }
 
   const plusZ = s.zysk >= 0
   const plusC = s.zmiana_proc >= 0
@@ -109,10 +148,67 @@ export default function StockDetail({ s, waluta, tab, onClose, onRefresh }) {
         </div>
       )}
 
-      <div style={st.sectionTitle}>Wykres — 6 miesięcy</div>
-      {loading && <div style={{ color: '#666', padding: 40, textAlign: 'center' }}>Ładowanie wykresu...</div>}
-      {!loading && chart && chart.error && <div style={{ color: '#e74c3c', padding: 20 }}>Błąd: {chart.error}</div>}
-      {!loading && chart && !chart.error && <StockChart data={chart} />}
+      {/* Chart + AI panel side by side */}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={st.sectionTitle}>Wykres — 6 miesięcy</div>
+          {chartLoading && <div style={{ color: '#666', padding: 40, textAlign: 'center' }}>Ładowanie wykresu...</div>}
+          {!chartLoading && chart && chart.error && <div style={{ color: '#e74c3c', padding: 20 }}>Błąd: {chart.error}</div>}
+          {!chartLoading && chart && !chart.error && <StockChart data={chart} />}
+        </div>
+
+        <div style={{ width: 300, flexShrink: 0 }}>
+          <div style={st.sectionTitle}>Rekomendacja AI</div>
+          <button
+            onClick={generateRecommendation}
+            disabled={aiLoading}
+            style={{
+              width: '100%',
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid #333',
+              background: aiLoading ? '#1a1d27' : '#13151f',
+              color: aiLoading ? '#555' : '#a78bfa',
+              cursor: aiLoading ? 'default' : 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              marginBottom: 12,
+              transition: 'all 0.15s',
+            }}
+          >
+            {aiLoading ? '⟳ Analizuję...' : aiDone ? '↺ Generuj ponownie' : '✦ Generuj rekomendację'}
+          </button>
+
+          {(aiText || aiLoading) && (
+            <div
+              ref={aiRef}
+              style={{
+                background: '#13151f',
+                border: '1px solid #2a2d3a',
+                borderRadius: 8,
+                padding: 14,
+                fontSize: 13,
+                lineHeight: 1.7,
+                color: '#ccc',
+                maxHeight: 420,
+                overflowY: 'auto',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {aiText}
+              {aiLoading && <span style={{ display: 'inline-block', width: 8, height: 14, background: '#a78bfa', borderRadius: 2, marginLeft: 2, animation: 'blink 1s step-end infinite', verticalAlign: 'text-bottom' }} />}
+            </div>
+          )}
+
+          {!aiText && !aiLoading && (
+            <div style={{ color: '#444', fontSize: 12, lineHeight: 1.6 }}>
+              Analiza uwzględnia wskaźniki techniczne, aktualną pozycję w portfelu oraz najnowsze newsy.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <style>{`@keyframes blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }`}</style>
     </div>
   )
 }
